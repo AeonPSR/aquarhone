@@ -20,5 +20,5 @@ export function useAuth() {
     user.value = null;
   }
 
-  return { isLoggedIn, user, login, logout };
+  return { isLoggedIn, user, token, login, logout };
 }

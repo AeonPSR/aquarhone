@@ -65,6 +65,29 @@ const updateActivity = async (req, res) => {
       return res.status(404).json({ error: 'Activity not found' });
     }
 
+    // If availableDates are being updated, check for removed dates
+    if (req.body.availableDates) {
+      const oldDates = activity.availableDates.map(d => new Date(d.date).toDateString());
+      const newDates = req.body.availableDates.map(d => new Date(d.date).toDateString());
+      const removedDates = oldDates.filter(date => !newDates.includes(date));
+
+      // Cancel bookings for removed dates
+      if (removedDates.length > 0) {
+        const cancelledBookings = await Booking.updateMany(
+          {
+            activity: activity._id,
+            status: 'confirmed',
+            selectedDate: { 
+              $in: removedDates.map(dateStr => new Date(dateStr))
+            }
+          },
+          { status: 'cancelled' }
+        );
+
+        console.log(`Cancelled ${cancelledBookings.modifiedCount} bookings for removed dates`);
+      }
+    }
+
     // Update fields
     activity.name = req.body.name || activity.name;
     activity.description = req.body.description || activity.description;
@@ -93,20 +116,22 @@ const deleteActivity = async (req, res) => {
       return res.status(404).json({ error: 'Activity not found' });
     }
 
-    // Check if there are any confirmed bookings
-    const confirmedBookings = await Booking.find({ 
-      activity: activity._id, 
-      status: 'confirmed' 
-    });
+    // Cancel all confirmed bookings for this activity
+    const cancelledBookings = await Booking.updateMany(
+      { 
+        activity: activity._id, 
+        status: 'confirmed' 
+      },
+      { status: 'cancelled' }
+    );
 
-    if (confirmedBookings.length > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete activity with confirmed bookings. Cancel bookings first.' 
-      });
-    }
+    console.log(`Cancelled ${cancelledBookings.modifiedCount} bookings for deleted activity: ${activity.name}`);
 
     await activity.deleteOne();
-    res.json({ message: 'Activity deleted successfully' });
+    res.json({ 
+      message: 'Activity deleted successfully',
+      cancelledBookings: cancelledBookings.modifiedCount
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

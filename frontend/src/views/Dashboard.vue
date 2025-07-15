@@ -1,150 +1,153 @@
 <template>
   <div class="dashboard-container">
     <div class="dashboard-content">
-      <h1>Dashboard</h1>
+      <h1>Découvrez nos Activités Aquatiques</h1>
+      <p class="subtitle">Réservez votre prochaine aventure sur le Rhône</p>
 
-      <!-- Create new project -->
-      <div class="form-card">
-        <h3>Create New Project</h3>
-        <form @submit.prevent="create" class="create-form">
-          <div class="form-group">
-            <label for="title">Project Title</label>
-            <input 
-              id="title"
-              v-model="newTitle" 
-              placeholder="Enter project title" 
-              required 
-            />
-          </div>
-          <div class="form-group">
-            <label for="description">Description</label>
-            <input 
-              id="description"
-              v-model="newDescription" 
-              placeholder="Enter project description" 
-            />
-          </div>
-          <button type="submit" class="submit-btn">Create Project</button>
-        </form>
+      <!-- Search and Filters -->
+      <div class="search-section">
+        <div class="search-bar">
+          <input 
+            v-model="searchQuery" 
+            placeholder="Rechercher une activité..." 
+            class="search-input"
+          />
+        </div>
+        <div class="filters">
+          <select v-model="selectedType" class="filter-select">
+            <option value="">Tous les types</option>
+            <option v-for="type in activityTypes" :key="type" :value="type">
+              {{ type }}
+            </option>
+          </select>
+          <select v-model="priceFilter" class="filter-select">
+            <option value="">Tous les prix</option>
+            <option value="0-30">0€ - 30€</option>
+            <option value="30-50">30€ - 50€</option>
+            <option value="50-100">50€ - 100€</option>
+          </select>
+        </div>
       </div>
 
-      <!-- Project List -->
-      <div class="projects-section">
-        <h3>Your Projects</h3>
-        <div class="projects-grid">
-          <div v-for="project in projects" :key="project._id" class="project-card">
-            <div v-if="editingId !== project._id" class="project-view">
-              <h4>{{ project.title }}</h4>
-              <p>{{ project.description }}</p>
-              <div class="project-actions">
-                <router-link :to="`/project/${project._id}`" class="view-btn">
-                  <span class="material-icons">visibility</span>
-                  View
-                </router-link>
-                <button @click="startEdit(project)" class="edit-btn">
-                  <span class="material-icons">edit</span>
-                  Edit
-                </button>
-                <button @click="confirmDelete(project._id)" class="delete-btn">
-                  <span class="material-icons">delete</span>
-                  Delete
-                </button>
+      <div v-if="loading" class="loading">
+        Chargement des activités...
+      </div>
+
+      <!-- Activities Grid -->
+      <div v-else-if="filteredActivities.length > 0" class="activities-section">
+        <div class="activities-grid">
+          <div 
+            v-for="activity in filteredActivities" 
+            :key="activity._id" 
+            class="activity-card"
+            @click="viewActivity(activity._id)"
+          >
+            <div class="activity-header">
+              <h3>{{ activity.name }}</h3>
+              <span class="activity-price">{{ activity.price }}€</span>
+            </div>
+            
+            <div class="activity-type">{{ activity.type }}</div>
+            
+            <p class="activity-description">{{ activity.description }}</p>
+            
+            <div class="activity-location">
+              <span class="material-icons">place</span>
+              {{ activity.place }}
+            </div>
+            
+            <div class="activity-info">
+              <div class="info-item">
+                <span class="material-icons">group</span>
+                {{ activity.totalPlaces }} places
+              </div>
+              <div class="info-item">
+                <span class="material-icons">event</span>
+                {{ activity.availableDates?.length || 0 }} date(s)
               </div>
             </div>
-
-            <div v-else class="project-edit">
-              <div class="form-group">
-                <label>Title</label>
-                <input v-model="editTitle" />
-              </div>
-              <div class="form-group">
-                <label>Description</label>
-                <input v-model="editDescription" />
-              </div>
-              <div class="edit-actions">
-                <button @click="saveEdit(project._id)" class="save-btn">Save</button>
-                <button @click="cancelEdit" class="cancel-btn">Cancel</button>
-              </div>
+            
+            <div class="activity-actions">
+              <button class="view-details-btn">
+                Voir les détails
+                <span class="material-icons">arrow_forward</span>
+              </button>
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-else class="no-activities">
+        <p>Aucune activité ne correspond à vos critères de recherche.</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import {
-  fetchProjects,
-  createProject,
-  updateProject,
-  deleteProject
-} from '../services/api';
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { fetchActivities } from '../services/api';
 
-const projects = ref([]);
-const token = localStorage.getItem('token');
+const router = useRouter();
 
-// New project form
-const newTitle = ref('');
-const newDescription = ref('');
+const activities = ref([]);
+const loading = ref(true);
+const searchQuery = ref('');
+const selectedType = ref('');
+const priceFilter = ref('');
 
-// Editing state
-const editingId = ref(null);
-const editTitle = ref('');
-const editDescription = ref('');
+const activityTypes = computed(() => {
+  const types = activities.value.map(activity => activity.type);
+  return [...new Set(types)];
+});
 
-// Load projects
-async function loadProjects() {
-  const res = await fetchProjects(token);
-  projects.value = res;
-}
-onMounted(loadProjects);
+const filteredActivities = computed(() => {
+  let filtered = activities.value;
 
-// Create project
-async function create() {
-  const res = await createProject({ title: newTitle.value, description: newDescription.value }, token);
-  if (res._id) {
-    newTitle.value = '';
-    newDescription.value = '';
-    await loadProjects();
-  } else {
-    alert(res.error || 'Creation failed');
+  // Filter by search query
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase();
+    filtered = filtered.filter(activity => 
+      activity.name.toLowerCase().includes(query) ||
+      activity.description.toLowerCase().includes(query) ||
+      activity.place.toLowerCase().includes(query)
+    );
+  }
+
+  // Filter by type
+  if (selectedType.value) {
+    filtered = filtered.filter(activity => activity.type === selectedType.value);
+  }
+
+  // Filter by price
+  if (priceFilter.value) {
+    const [min, max] = priceFilter.value.split('-').map(Number);
+    filtered = filtered.filter(activity => 
+      activity.price >= min && activity.price <= max
+    );
+  }
+
+  return filtered;
+});
+
+async function loadActivities() {
+  try {
+    loading.value = true;
+    const data = await fetchActivities();
+    activities.value = data;
+  } catch (error) {
+    console.error('Error loading activities:', error);
+  } finally {
+    loading.value = false;
   }
 }
 
-// Edit project
-function startEdit(project) {
-  editingId.value = project._id;
-  editTitle.value = project.title;
-  editDescription.value = project.description;
-}
-function cancelEdit() {
-  editingId.value = null;
+function viewActivity(activityId) {
+  router.push(`/activity/${activityId}`);
 }
 
-// Save edits
-async function saveEdit(id) {
-  const res = await updateProject(id, { title: editTitle.value, description: editDescription.value }, token);
-  if (!res.error) {
-    editingId.value = null;
-    await loadProjects();
-  } else {
-    alert(res.error || 'Update failed');
-  }
-}
-
-// Delete with confirmation
-async function confirmDelete(id) {
-  if (confirm("Are you sure you want to delete this project?")) {
-    const res = await deleteProject(id, token);
-    if (!res.error) {
-      await loadProjects();
-    } else {
-      alert(res.error || 'Deletion failed');
-    }
-  }
-}
+onMounted(loadActivities);
 </script>
 
 <style scoped>
@@ -156,12 +159,11 @@ async function confirmDelete(id) {
   transition: margin-left 0.3s ease;
 }
 
-/* Mobile responsive */
 @media (max-width: 768px) {
   .dashboard-container {
     margin-left: 0;
     padding: 1rem;
-    padding-top: 60px; /* Account for mobile toggle button */
+    padding-top: 60px;
   }
 }
 
@@ -171,188 +173,217 @@ async function confirmDelete(id) {
 }
 
 .dashboard-content h1 {
-  color: #333;
-  margin-bottom: 2rem;
-  font-weight: 600;
-}
-
-.form-card {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  margin-bottom: 2rem;
-}
-
-.form-card h3 {
-  margin-bottom: 1.5rem;
-  color: #333;
-  font-weight: 600;
-}
-
-.create-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  font-weight: 500;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-.form-group input {
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #007bff;
-}
-
-.submit-btn {
-  padding: 0.75rem;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  margin-top: 0.5rem;
-}
-
-.submit-btn:hover {
-  background-color: #0056b3;
-}
-
-.projects-section h3 {
-  color: #333;
-  margin-bottom: 1.5rem;
-  font-weight: 600;
-}
-
-.projects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.project-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 1.5rem;
-  transition: transform 0.2s;
-}
-
-.project-card:hover {
-  transform: translateY(-2px);
-}
-
-.project-view h4 {
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-.project-view p {
-  color: #666;
+  color: #2c5aa0;
   margin-bottom: 1rem;
+  font-weight: 600;
+  text-align: center;
+  font-size: 2.5rem;
 }
 
-.project-actions {
+.subtitle {
+  text-align: center;
+  color: #666;
+  font-size: 1.2rem;
+  margin-bottom: 3rem;
+}
+
+.search-section {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+}
+
+.search-bar {
+  margin-bottom: 20px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 15px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 25px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #2c5aa0;
+}
+
+.filters {
   display: flex;
-  gap: 0.5rem;
+  gap: 15px;
   flex-wrap: wrap;
-  justify-content: center;
 }
 
-.view-btn, .edit-btn, .delete-btn {
+.filter-select {
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+
+.activities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 25px;
+}
+
+.activity-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  padding: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.activity-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+  border-color: #2c5aa0;
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.activity-header h3 {
+  color: #2c5aa0;
+  margin: 0;
+  font-size: 1.3rem;
+  flex: 1;
+}
+
+.activity-price {
+  background: linear-gradient(135deg, #2c5aa0, #1e3d72);
+  color: white;
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.activity-type {
+  background: #e3f2fd;
+  color: #1565c0;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  display: inline-block;
+  margin-bottom: 15px;
+}
+
+.activity-description {
+  color: #666;
+  margin-bottom: 15px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.activity-location {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.75rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  text-decoration: none;
-  transition: background-color 0.2s;
-}
-
-.view-btn {
-  background-color: #28a745;
-  color: white;
-}
-
-.view-btn:hover {
-  background-color: #218838;
-}
-
-.edit-btn {
-  background-color: #ffc107;
-  color: #212529;
-}
-
-.edit-btn:hover {
-  background-color: #e0a800;
-}
-
-.delete-btn {
-  background-color: #dc3545;
-  color: white;
-}
-
-.delete-btn:hover {
-  background-color: #c82333;
-}
-
-.project-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.edit-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.save-btn, .cancel-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  color: #777;
+  margin-bottom: 20px;
   font-size: 0.9rem;
 }
 
-.save-btn {
-  background-color: #28a745;
+.activity-location .material-icons {
+  font-size: 18px;
+  margin-right: 5px;
+}
+
+.activity-info {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.info-item .material-icons {
+  font-size: 16px;
+  margin-right: 5px;
+}
+
+.activity-actions {
+  text-align: center;
+}
+
+.view-details-btn {
+  background: linear-gradient(135deg, #2c5aa0, #1e3d72);
   color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  transition: all 0.3s ease;
 }
 
-.cancel-btn {
-  background-color: #6c757d;
-  color: white;
+.view-details-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(44, 90, 160, 0.3);
 }
 
-.save-btn:hover {
-  background-color: #218838;
+.loading {
+  text-align: center;
+  padding: 60px;
+  font-size: 18px;
+  color: #666;
 }
 
-.cancel-btn:hover {
-  background-color: #5a6268;
+.no-activities {
+  text-align: center;
+  padding: 60px;
+  color: #666;
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-content h1 {
+    font-size: 2rem;
+  }
+  
+  .activities-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .filters {
+    flex-direction: column;
+  }
+  
+  .activity-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .activity-info {
+    flex-direction: column;
+    gap: 10px;
+  }
 }
 </style>

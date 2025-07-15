@@ -34,11 +34,19 @@
 	  <template v-else>
 		<router-link to="/dashboard" @click="closeMobileMenu" :class="{ 'icon-only': isMobile && !isMobileMenuOpen }">
 		  <span class="material-icons">dashboard</span>
-		  <span v-if="!isMobile || isMobileMenuOpen">Dashboard</span>
+		  <span v-if="!isMobile || isMobileMenuOpen">Activités</span>
+		</router-link>
+		<router-link to="/my-bookings" @click="closeMobileMenu" :class="{ 'icon-only': isMobile && !isMobileMenuOpen }">
+		  <span class="material-icons">event</span>
+		  <span v-if="!isMobile || isMobileMenuOpen">Mes Réservations</span>
+		</router-link>
+		<router-link v-if="user?.isAdmin" to="/admin" @click="closeMobileMenu" :class="{ 'icon-only': isMobile && !isMobileMenuOpen }">
+		  <span class="material-icons">admin_panel_settings</span>
+		  <span v-if="!isMobile || isMobileMenuOpen">Administration</span>
 		</router-link>
 		<button @click="handleLogout" :class="{ 'icon-only': isMobile && !isMobileMenuOpen }">
 		  <span class="material-icons">logout</span>
-		  <span v-if="!isMobile || isMobileMenuOpen">Logout</span>
+		  <span v-if="!isMobile || isMobileMenuOpen">Déconnexion</span>
 		</button>
 	  </template>
 	</nav>
@@ -48,12 +56,19 @@
 </template>
   
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '../composables/auth';
 
 const router = useRouter();
 const { isLoggedIn, user, logout } = useAuth();
+
+// Debug logging for user data
+watchEffect(() => {
+  console.log('Navbar - User data:', user.value);
+  console.log('Navbar - Is admin:', user.value?.isAdmin);
+  console.log('Navbar - Is logged in:', isLoggedIn.value);
+});
 
 const isMobile = ref(false);
 const isMobileMenuOpen = ref(false);
