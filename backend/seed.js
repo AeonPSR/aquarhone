@@ -1,78 +1,166 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const bcrypt = require('bcryptjs');
+const bcryptjs = require('bcryptjs');
+
 dotenv.config();
 
 const User = require('./models/User');
-const Project = require('./models/Project');
-const Task = require('./models/Task');
+const Activity = require('./models/Activity');
 
-async function seed() {
-  await mongoose.connect(process.env.MONGO_URI);
-  console.log('Connected to MongoDB');
+async function seedData() {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('Connected to MongoDB');
 
-  // Check if user already exists
-  let user = await User.findOne({ email: 'testuser@example.com' });
-  const hashedPassword = await bcrypt.hash('testpass123', 10);
+    // Clear existing data
+    await User.deleteMany({});
+    await Activity.deleteMany({});
+    console.log('Cleared existing data');
 
-  if (!user) {
-    user = await User.create({
-      name: 'Test User ',
-      email: 'testuser@example.com',
-      password: hashedPassword, 
+    // Create admin user
+    const hashedPassword = await bcryptjs.hash('admin123', 10);
+    const admin = await User.create({
+      name: 'Admin User',
+      email: 'admin@example.com',
+      password: hashedPassword,
+      isAdmin: true,
     });
-    console.log('User created');
-  } else {
-    console.log('User already exists');
-  }
+    console.log('Created admin user');
 
-  // Check if project already exists
-  let project = await Project.findOne({ title: 'Sample Project' });
-
-  if (!project) {
-    project = await Project.create({
-      title: 'Sample Project',
-      description: 'This is a sample project used for testing.',
-      owner: user._id,
+    // Create regular user
+    const userPassword = await bcryptjs.hash('user123', 10);
+    const user = await User.create({
+      name: 'John Doe',
+      email: 'user@example.com',
+      password: userPassword,
+      isAdmin: false,
     });
-    console.log('Project created');
-  } else {
-    console.log('Project already exists');
-  }
+    console.log('Created regular user');
 
-  // Check if tasks already exist
-  const existingTasks = await Task.find({ project: project._id });
-  if (existingTasks.length === 0) {
-    await Task.insertMany([
+    // Create sample activities
+    const activities = [
       {
-        title: 'Setup environment',
-        description: 'Install dependencies and configure the environment.',
-        status: 'todo',
-        project: project._id,
-        assignedTo: user._id,
+        name: 'Descente en Kayak',
+        description: 'Découvrez les paysages magnifiques du Rhône en kayak accompagné d\'un guide expérimenté. Activité adaptée à tous les niveaux.',
+        type: 'Sport nautique',
+        place: 'Base nautique de Lyon, Quai Rambaud',
+        availableDates: [
+          {
+            date: new Date('2025-08-15'),
+            startTime: '09:00',
+            endTime: '17:00',
+          },
+          {
+            date: new Date('2025-08-22'),
+            startTime: '09:00',
+            endTime: '17:00',
+          },
+        ],
+        price: 45,
+        totalPlaces: 16,
+        createdBy: admin._id,
       },
       {
-        title: 'Implement authentication',
-        description: 'Add login and register functionality.',
-        status: 'in progress',
-        project: project._id,
-        assignedTo: user._id,
+        name: 'Initiation Stand-Up Paddle',
+        description: 'Apprenez les bases du paddle sur les eaux calmes du Rhône. Matériel fourni, cours adapté aux débutants.',
+        type: 'Sport nautique',
+        place: 'Parc de la Tête d\'Or, Lyon',
+        availableDates: [
+          {
+            date: new Date('2025-08-20'),
+            startTime: '10:00',
+            endTime: '16:00',
+          },
+          {
+            date: new Date('2025-08-27'),
+            startTime: '10:00',
+            endTime: '16:00',
+          },
+        ],
+        price: 35,
+        totalPlaces: 12,
+        createdBy: admin._id,
       },
       {
-        title: 'Deploy application',
-        description: 'Deploy the app to the production environment.',
-        status: 'done',
-        project: project._id,
-        assignedTo: user._id,
+        name: 'Croisière Détente',
+        description: 'Embarquez pour une croisière relaxante sur le Rhône avec collation et découverte du patrimoine fluvial lyonnais.',
+        type: 'Croisière',
+        place: 'Embarcadère Bellecour, Lyon',
+        availableDates: [
+          {
+            date: new Date('2025-08-25'),
+            startTime: '14:00',
+            endTime: '18:00',
+          },
+          {
+            date: new Date('2025-09-01'),
+            startTime: '14:00',
+            endTime: '18:00',
+          },
+          {
+            date: new Date('2025-09-08'),
+            startTime: '14:00',
+            endTime: '18:00',
+          },
+        ],
+        price: 28,
+        totalPlaces: 25,
+        createdBy: admin._id,
       },
-    ]);
-    console.log('Tasks added');
-  } else {
-    console.log('Tasks already exist');
-  }
+      {
+        name: 'Canoë Famille',
+        description: 'Sortie en canoë spécialement conçue pour les familles. Parcours sécurisé sur une section calme du Rhône.',
+        type: 'Activité familiale',
+        place: 'Base de Givors, Rhône',
+        availableDates: [
+          {
+            date: new Date('2025-08-16'),
+            startTime: '10:00',
+            endTime: '15:00',
+          },
+          {
+            date: new Date('2025-08-23'),
+            startTime: '10:00',
+            endTime: '15:00',
+          },
+        ],
+        price: 32,
+        totalPlaces: 20,
+        createdBy: admin._id,
+      },
+      {
+        name: 'Rafting Sensation',
+        description: 'Vivez des sensations fortes sur les rapides du Rhône ! Encadrement professionnel et équipement de sécurité fourni.',
+        type: 'Sport extrême',
+        place: 'Sault-Brénaz, Ain',
+        availableDates: [
+          {
+            date: new Date('2025-08-30'),
+            startTime: '09:00',
+            endTime: '16:00',
+          },
+        ],
+        price: 65,
+        totalPlaces: 10,
+        createdBy: admin._id,
+      },
+    ];
 
-  console.log('Seeding complete');
-  process.exit();
+    for (const activityData of activities) {
+      const activity = await Activity.create(activityData);
+      console.log(`Created activity: ${activity.name}`);
+    }
+
+    console.log('✅ Seeding completed successfully!');
+    console.log('🔑 Login credentials:');
+    console.log('   Admin: admin@example.com / admin123');
+    console.log('   User:  user@example.com / user123');
+
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Seeding failed:', error);
+    process.exit(1);
+  }
 }
 
-seed();
+seedData();
